@@ -34,7 +34,7 @@ function M.get_most_specific_group()
     end
   end
 
-  return match or groups[#groups]
+  return match or groups[1]
 end
 
 function M.decrement()
@@ -76,6 +76,7 @@ function M.increment()
 end
 
 local convert_to_hex = function(hl_group, attribute)
+  vim.pretty_print(string.format("#%x", vim.api.nvim_get_hl_by_name(hl_group, true)[attribute]))
   return string.format("#%x", vim.api.nvim_get_hl_by_name(hl_group, true)[attribute])
 end
 
@@ -117,7 +118,6 @@ function M.toggle_attr(attr)
   -- local group = M.get_nested_groups(groups)
   -- print(group)
   local hl = vim.api.nvim_get_hl_by_name(group, true)
-  print(group)
   hl[attr] = not hl[attr]
   vim.api.nvim_set_hl(0, group, hl)
 end
