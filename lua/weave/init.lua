@@ -1,5 +1,34 @@
 local M = {}
 
+M._start = 0
+
+function M.get_hl_groups()
+  local inspect = vim.inspect_pos()
+  local ts = inspect["treesitter"]
+  local semantic_tokens = inspect["semantic_tokens"]
+  local syntax = inspect["syntax"]
+
+  local groups = {}
+  for i = 1, #semantic_tokens, 1 do
+    table.insert(groups, '@'..semantic_tokens[i]['type'] or nil)
+  end
+  for i = 1, #syntax, 1 do
+    table.insert(groups, '@'..syntax[i]['type'] or nil)
+  end
+  for i = 1, #ts, 1 do
+    table.insert(groups, '@'..ts[i]['capture'] or nil)
+  end
+  for i, v in ipairs(groups) do
+    if v == "@variable" and #groups > 1 then
+      table.remove(groups, i)
+    end
+  end
+  if groups["@variable"] and #groups > 1 then
+    groups["@variable"] = nil
+  end
+  vim.pretty_print(groups)
+  return groups
+end
 local create_color_window = function(hl, groups)
   local buf = vim.api.nvim_create_buf(false, true)
   vim.api.nvim_buf_set_lines(buf, 0, #hl, false, {hl})
@@ -29,6 +58,26 @@ local create_color_window = function(hl, groups)
     vim.api.nvim_win_close(win, true)
     vim.api.nvim_buf_delete(buf, {force = true})
   end})
+end
+local convert_to_hex = function(hl_group, attribute)
+  return string.format("#%x", vim.api.nvim_get_hl_by_name(hl_group, true)[attribute])
+end
+
+function M.toggle_attr(attr)
+  local hl_groups = M.get_hl_groups()
+  for _, hl_group in pairs(hl_groups) do
+    local hl = vim.api.nvim_get_hl_by_name(hl_group, true)
+    hl[attr] = not hl[attr]
+    vim.api.nvim_set_hl(0, hl_group, hl)
+  end
+end
+
+function M.set_color()
+  local hl_groups = M.get_hl_groups()
+
+  local old_color = convert_to_hex(hl_groups[1], "foreground")
+
+  create_color_window(old_color, hl_groups)
 end
 function M.setup()
   -- To check how long everything takes to setup
