@@ -9,20 +9,32 @@ function M.get_hl_groups()
   local ts = inspect["treesitter"]
 
   local groups = {}
+  for i = 1, #syntax, 1 do
+    table.insert(groups, '@'..syntax[i]['type'] or nil)
+  end
   for i = 1, #semantic_tokens, 1 do
     table.insert(groups, '@'..semantic_tokens[i]['type'] or nil)
   end
-  -- for i = 1, #syntax, 1 do
-  --   table.insert(groups, '@'..syntax[i]['type'] or nil)
-  -- end
   for i = 1, #ts, 1 do
     table.insert(groups, ts[i]['hl_group'] or nil)
   end
-  if groups["@variable"] and #groups > 1 then
-    groups["@variable"] = nil
-  end
-  vim.pretty_print(groups)
   return groups
+end
+
+function M.get_most_specific_group()
+  local groups = M.get_hl_groups()
+
+  local match = nil
+  for _, g in pairs(groups) do
+    local index = string.find(g, '.', 1, true)
+    if index then
+      -- match = g:sub(1, index-1)
+      match = g
+      break
+    end
+  end
+
+  return match or groups[#groups]
 end
 
 function M.decrement()
@@ -67,12 +79,12 @@ local convert_to_hex = function(hl_group, attribute)
   return string.format("#%x", vim.api.nvim_get_hl_by_name(hl_group, true)[attribute])
 end
 
-local create_color_window = function(hl, groups)
+local create_color_window = function(hl, group)
   local buf = vim.api.nvim_create_buf(false, true)
   vim.api.nvim_buf_set_lines(buf, 0, #hl, false, {hl})
 
   local win = vim.api.nvim_open_win(buf, false, {
-      relative='cursor', style='minimal', border='rounded', row=1, col=-3, width=#hl, height=1
+      relative='cursor', style='minimal', border='rounded', row=-3, col=-4, width=#hl, height=1
   })
 
   vim.api.nvim_buf_set_option(buf, "modifiable", true)
@@ -85,20 +97,12 @@ local create_color_window = function(hl, groups)
   vim.api.nvim_buf_set_keymap(buf, 'n', 'q', "<CMD>close<CR>", {silent = true})
   vim.api.nvim_buf_set_keymap(buf, 'n', '<esc>', "<CMD>close<CR>", {silent = true})
 
-  -- match colors to group
-  local colors = {}
-  for _, i in pairs(groups) do
-    colors[i] = convert_to_hex(i, "foreground")
-  end
-  local old_hl = hl
+  local attr = vim.api.nvim_get_hl_by_name(group, true)
 
   vim.api.nvim_create_autocmd({"TextChanged", "TextChangedI"}, {buffer = buf, callback = function()
     hl = vim.api.nvim_get_current_line()
-    for _, g in pairs(groups) do
-      if colors[g] == old_hl then
-        vim.api.nvim_set_hl(0, g, {fg = hl})
-      end
-    end
+    attr['fg'] = hl
+    vim.api.nvim_set_hl(0, group, attr)
   end})
 
   vim.api.nvim_create_autocmd({"BufLeave"}, {buffer = buf, callback = function()
@@ -109,24 +113,25 @@ end
 
 
 function M.toggle_attr(attr)
-  local hl_groups = M.get_hl_groups()
-  for _, hl_group in pairs(hl_groups) do
-    local hl = vim.api.nvim_get_hl_by_name(hl_group, true)
-    hl[attr] = not hl[attr]
-    vim.api.nvim_set_hl(0, hl_group, hl)
-  end
+  local group = M.get_most_specific_group()
+  -- local group = M.get_nested_groups(groups)
+  -- print(group)
+  local hl = vim.api.nvim_get_hl_by_name(group, true)
+  print(group)
+  hl[attr] = not hl[attr]
+  vim.api.nvim_set_hl(0, group, hl)
 end
 
 function M.set_color()
-  local hl_groups = M.get_hl_groups()
+  local hl_group = M.get_most_specific_group()
 
-  local old_color = convert_to_hex(hl_groups[1], "foreground")
+  local old_color = convert_to_hex(hl_group, "foreground")
 
-  create_color_window(old_color, hl_groups)
+  create_color_window(old_color, hl_group)
 end
 
 local setup_commands = function()
-  vim.api.nvim_create_user_command("WeaveGetGroups", "lua vim.pretty_print(require('highlife').get_hl_groups())", {})
+  vim.api.nvim_create_user_command("WeaveGetGroups", "lua vim.pretty_print(require('weave').get_hl_groups())", {})
   vim.api.nvim_create_user_command("WeaveSetColor", "lua require('weave').set_color()", {})
   vim.api.nvim_create_user_command("WeaveToggleBold", "lua require('weave').toggle_attr('bold')", {})
   vim.api.nvim_create_user_command("WeaveToggleItalic", "lua require('weave').toggle_attr('italic')", {})
