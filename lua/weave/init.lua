@@ -29,6 +29,45 @@ function M.get_hl_groups()
   vim.pretty_print(groups)
   return groups
 end
+
+function M.decrement()
+  local col = vim.fn.col "."
+  local line = vim.api.nvim_get_current_line()
+  local ch = string.sub(line, col, col)
+  if ch == 'a' then
+    -- bump down to 9
+    ch = '9'
+  elseif ch == '0' or ch == '#' then
+    -- do nothing
+  else
+    -- it's a number
+    ch = string.char(string.byte(ch) - 1)
+  end
+  vim.api.nvim_set_current_line(line:sub(1, col-1) .. ch .. line:sub(col+1))
+
+  -- because nvim_set_current_line doesn't throw this event apparently
+  vim.cmd.doautocmd("TextChanged")
+end
+
+function M.increment()
+  local col = vim.fn.col "."
+  local line = vim.api.nvim_get_current_line()
+  local ch = string.sub(line, col, col)
+  if ch == '9' then
+    -- bump up to a
+    ch = 'a'
+  elseif ch == 'f' or ch == '#' then
+    -- do nothing
+  else
+    -- it's a number
+    ch = string.char(string.byte(ch) + 1)
+  end
+  vim.api.nvim_set_current_line(line:sub(1, col-1) .. ch .. line:sub(col+1))
+
+  -- because nvim_set_current_line doesn't throw this event apparently
+  vim.cmd.doautocmd("TextChanged")
+end
+
 local create_color_window = function(hl, groups)
   local buf = vim.api.nvim_create_buf(false, true)
   vim.api.nvim_buf_set_lines(buf, 0, #hl, false, {hl})
@@ -59,6 +98,7 @@ local create_color_window = function(hl, groups)
     vim.api.nvim_buf_delete(buf, {force = true})
   end})
 end
+
 local convert_to_hex = function(hl_group, attribute)
   return string.format("#%x", vim.api.nvim_get_hl_by_name(hl_group, true)[attribute])
 end
@@ -79,6 +119,16 @@ function M.set_color()
 
   create_color_window(old_color, hl_groups)
 end
+
+local setup_commands = function()
+  vim.api.nvim_create_user_command("WeaveGetGroups", "lua vim.pretty_print(require('highlife').get_hl_groups())", {})
+  vim.api.nvim_create_user_command("WeaveSetColor", "lua require('weave').set_color()", {})
+  vim.api.nvim_create_user_command("WeaveToggleBold", "lua require('weave').toggle_attr('bold')", {})
+  vim.api.nvim_create_user_command("WeaveToggleItalic", "lua require('weave').toggle_attr('italic')", {})
+  vim.api.nvim_create_user_command("WeaveToggleUnderline", "lua require('weave').toggle_attr('underline')", {})
+end
+
+
 function M.setup()
   -- To check how long everything takes to setup
   local start_time = vim.loop.hrtime()
@@ -100,6 +150,8 @@ function M.setup()
       { title = "weave.nvim" }
     )
   end
+
+  setup_commands()
 
   print(vim.loop.hrtime() - start_time)
 end
