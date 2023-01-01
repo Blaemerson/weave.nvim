@@ -4,24 +4,19 @@ M._start = 0
 
 function M.get_hl_groups()
   local inspect = vim.inspect_pos()
-  local ts = inspect["treesitter"]
   local semantic_tokens = inspect["semantic_tokens"]
   local syntax = inspect["syntax"]
+  local ts = inspect["treesitter"]
 
   local groups = {}
   for i = 1, #semantic_tokens, 1 do
     table.insert(groups, '@'..semantic_tokens[i]['type'] or nil)
   end
-  for i = 1, #syntax, 1 do
-    table.insert(groups, '@'..syntax[i]['type'] or nil)
-  end
+  -- for i = 1, #syntax, 1 do
+  --   table.insert(groups, '@'..syntax[i]['type'] or nil)
+  -- end
   for i = 1, #ts, 1 do
-    table.insert(groups, '@'..ts[i]['capture'] or nil)
-  end
-  for i, v in ipairs(groups) do
-    if v == "@variable" and #groups > 1 then
-      table.remove(groups, i)
-    end
+    table.insert(groups, ts[i]['hl_group'] or nil)
   end
   if groups["@variable"] and #groups > 1 then
     groups["@variable"] = nil
@@ -68,6 +63,10 @@ function M.increment()
   vim.cmd.doautocmd("TextChanged")
 end
 
+local convert_to_hex = function(hl_group, attribute)
+  return string.format("#%x", vim.api.nvim_get_hl_by_name(hl_group, true)[attribute])
+end
+
 local create_color_window = function(hl, groups)
   local buf = vim.api.nvim_create_buf(false, true)
   vim.api.nvim_buf_set_lines(buf, 0, #hl, false, {hl})
@@ -86,10 +85,19 @@ local create_color_window = function(hl, groups)
   vim.api.nvim_buf_set_keymap(buf, 'n', 'q', "<CMD>close<CR>", {silent = true})
   vim.api.nvim_buf_set_keymap(buf, 'n', '<esc>', "<CMD>close<CR>", {silent = true})
 
+  -- match colors to group
+  local colors = {}
+  for _, i in pairs(groups) do
+    colors[i] = convert_to_hex(i, "foreground")
+  end
+  local old_hl = hl
+
   vim.api.nvim_create_autocmd({"TextChanged", "TextChangedI"}, {buffer = buf, callback = function()
     hl = vim.api.nvim_get_current_line()
     for _, g in pairs(groups) do
-      vim.api.nvim_set_hl(0, g, {fg = hl})
+      if colors[g] == old_hl then
+        vim.api.nvim_set_hl(0, g, {fg = hl})
+      end
     end
   end})
 
@@ -99,9 +107,6 @@ local create_color_window = function(hl, groups)
   end})
 end
 
-local convert_to_hex = function(hl_group, attribute)
-  return string.format("#%x", vim.api.nvim_get_hl_by_name(hl_group, true)[attribute])
-end
 
 function M.toggle_attr(attr)
   local hl_groups = M.get_hl_groups()
